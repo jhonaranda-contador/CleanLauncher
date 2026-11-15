@@ -497,7 +497,12 @@ public class MainActivity extends Activity implements NowPlaying.Listener {
         else safeStart(new Intent(android.provider.Settings.ACTION_SETTINGS));
     }
 
+    private boolean launchedCarPlay;
+
     private void openMaps() {
+        // CarPlay first (Zlink): the iPhone's Waze/Maps drives navigation. Falls back to local Maps.
+        Intent carplay = getPackageManager().getLaunchIntentForPackage(CarPlayOverlay.CARPLAY_PACKAGE);
+        if (carplay != null && safeStart(carplay)) { launchedCarPlay = true; return; }
         Intent maps = getPackageManager().getLaunchIntentForPackage("com.google.android.apps.maps");
         if (maps == null || !safeStart(maps)) {
             safeStart(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=")));
@@ -572,11 +577,15 @@ public class MainActivity extends Activity implements NowPlaying.Listener {
         if (Profile.isNwd(this)) handler.post(radioPoll);
         nowPlaying.addListener(this);
         onNowPlayingChanged();
+        stopService(new Intent(this, CarPlayOverlay.class)); // launcher is back: no floating pill
+        launchedCarPlay = false;
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        // Another app is in front (CarPlay auto-launch or the compass button): float the pill over it.
+        startService(new Intent(this, CarPlayOverlay.class).putExtra(CarPlayOverlay.EXTRA_FORCE, launchedCarPlay));
         unregisterReceiver(illReceiver);
         handler.removeCallbacks(periodic);
         handler.removeCallbacks(radioPoll);
